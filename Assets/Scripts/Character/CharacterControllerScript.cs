@@ -4,111 +4,92 @@ using UnityEngine;
 using UnityEngine.Networking;
 
 public class CharacterControllerScript : NetworkBehaviour {
-	private float moveSpeed;
-	private Rigidbody rb;
-	private SpriteRenderer localSprite;
-	private bool onGround;
-	Animator anim;
+	public float moveSpeed = 0.1f;
+	private bool onGround = true;
 
+	SpriteRenderer localSprite;
+	Animator animator;
+
+	//some flags to check when certain animations are playing
+	// bool _isPlaying_walk = false;
+
+	[SyncVar(hook = "changeDirection")]
+	string _currentDirection = "left";
+
+	//Current Spell implementation
 	public GameObject bulletPrefab;
-
 	public Transform bulletSpawn;
 
 	// Use this for initialization
-	void Start () {
-		onGround = true;
-		moveSpeed = 1f;
-		rb = GetComponent<Rigidbody>();
-		anim = GetComponent<Animator>();
+	void Start ()
+	{
+		animator = GetComponent<Animator>();
 		localSprite = GetComponent<SpriteRenderer>();
 	}
 
 	void FixedUpdate()
 	{
-
 		if (!isLocalPlayer)
 		{
     	return;
 		}
 
-		if (Input.GetKeyDown(KeyCode.Space))
+		if (Input.GetKeyDown(KeyCode.Z))
 		{
     	CmdFire();
 		}
 
-		anim.SetFloat("Speed", 0);
-		anim.SetBool("N", false);
-		anim.SetBool("S", false);
-		anim.SetBool("W-E", false);
-		anim.SetBool("NW-NE", false);
-		anim.SetBool("SW-SE", false);
-		anim.SetBool("grounded", true);
+		var x = Input.GetAxis("Horizontal") * moveSpeed;
+    var z = Input.GetAxis("Vertical") * moveSpeed;
+		var y = Input.GetAxis("Jump") * -moveSpeed;
 
-		var x = Input.GetAxis("Horizontal") * 0.1f;
-    var z = Input.GetAxis("Vertical") * 0.1f;
-		var y = Input.GetAxis("Jump") * 0.1f;
+		bool isWalking = (Mathf.Abs(x) + Mathf.Abs(z)) > 0;
 
-    transform.Translate(x, 0f, z);
+		animator.SetBool("isWalking", isWalking);
 
 		//Jump
-		if(Input.GetAxis("Jump") > 0) {
-		 transform.Translate(0f, y, 0f);
-		 anim.SetBool("grounded",  false);
-		 onGround = false;
-		}
-		//North-East Movement
-		if (z >= 0.01f && x >= 0.01f)
+		if (Input.GetAxis("Jump") > 0)
 		{
-			localSprite.flipX = true;
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("NW-NE", true);
+				onGround = false;
+	 		 	transform.Translate(0f, 0f, y);
 		}
-		//North-West Movement
-		else if (z >= 0.01f && x <= -0.01f)
+
+		if(isWalking && onGround)
 		{
-			localSprite.flipX = false;
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("NW-NE", true);
-		}
-		//South-East Movement
-		else if (z <= -0.01f && x >= 0.01f)
-		{
-			localSprite.flipX = true;
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("SW-SE", true);
-		}
-		//South-West Movement
-		else if (z <= -0.01f && x <= -0.01f)
-		{
-			localSprite.flipX = false;
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("SW-SE", true);
-		}
-		//North Movement
-		else if (z >= 0.01f)
-		{
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("N", true);
-		}
-		//East Movement
-		else if (x >= 0.01f)
-		{
-			localSprite.flipX = true;
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("W-E", true);
-		}
-		//South Movement
-		else if (z <= -0.01f)
-		{
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("S", true);
-		}
-		//West Movement
-		else if (x <= -0.01f)
-		{
-			localSprite.flipX = false;
-			anim.SetFloat("Speed", Mathf.Abs(moveSpeed));
-			anim.SetBool("W-E", true);
+			animator.SetFloat("x", x);
+			animator.SetFloat("y", z);
+
+			transform.Translate(x, z, 0f);
+			//North-East Movement
+			if (z >= 0.01f && x >= 0.01f)
+			{
+				CmdChangeDirection("right");
+			}
+			//North-West Movement
+			else if (z >= 0.01f && x <= -0.01f)
+			{
+				CmdChangeDirection("left");
+			}
+			//South-East Movement
+			else if (z <= -0.01f && x >= 0.01f)
+			{
+				CmdChangeDirection("right");
+			}
+			//South-West Movement
+			else if (z <= -0.01f && x <= -0.01f)
+			{
+				CmdChangeDirection("left");
+			}
+			//East Movement
+			else if (x >= 0.01f)
+			{
+				CmdChangeDirection("right");
+			}
+			//West Movement
+			else if (x <= -0.01f)
+			{
+				CmdChangeDirection("left");
+			}
 		}
 	}
 
@@ -116,35 +97,127 @@ public class CharacterControllerScript : NetworkBehaviour {
 	public override void OnStartLocalPlayer()
 	{
 		Camera.main.GetComponent<CameraFollow>().setTarget(gameObject.transform);
-		GetComponent<SpriteRenderer>().color = new Color(1f,0.30196078f, 0.30196078f);
+		GetComponentInChildren<SpriteRenderer>().color = new Color(1f,0.30196078f, 0.30196078f);
 	}
 
 	[Command]
 	void CmdFire()
 	{
-    // Create the Bullet from the Bullet Prefab
-    var bullet = (GameObject)Instantiate (
-        bulletPrefab,
-        bulletSpawn.position,
-        bulletSpawn.rotation);
+		var mana = GetComponent<Mana>();
+		var spellCost = 10;
 
-    // Add velocity to the bullet
-    bullet.GetComponent<Rigidbody>().velocity = bullet.transform.forward * 6;
+		if (mana.ReturnMana() > spellCost)
+		{
+			mana.UseMana(spellCost);
 
-		// Spawn the bullet on the Clients
-    NetworkServer.Spawn(bullet);
+			// Create the Bullet from the Bullet Prefab
+			var bullet = (GameObject)Instantiate (
+					bulletPrefab,
+					bulletSpawn.position,
+					bulletSpawn.rotation);
 
-    // Destroy the bullet after 2 seconds
-    Destroy(bullet, 2.0f);
+			// Add velocity to the bullet
+			bullet.GetComponent<Rigidbody>().velocity = bullet.transform.up * 6;
+
+			// Spawn the bullet on the Clients
+			NetworkServer.Spawn(bullet);
+
+			// Destroy the bullet after 2 seconds
+			Destroy(bullet, 2.0f);
+		}
 	}
 
- 	//Collision Code
+	//--------------------------------------
+	// Change the players animation state
+	//--------------------------------------
+	// void changeState(int state){
+	//
+	// 		if (_currentAnimationState == state)
+	// 		return;
+	//
+	// 		switch (state) {
+	//
+	// 		case STATE_WALK_UP:
+	// 				animator.SetInteger("state", STATE_WALK_UP);
+	// 				break;
+	//
+	// 		case STATE_WALK_DOWN:
+	// 				animator.SetInteger("state", STATE_WALK_DOWN);
+	// 				break;
+	//
+	// 		case STATE_WALK_LEFT:
+	// 				animator.SetInteger("state", STATE_WALK_LEFT);
+	// 				break;
+	//
+	// 		case STATE_JUMP:
+	// 				animator.SetInteger("state", STATE_JUMP);
+	// 				break;
+	//
+	// 		case STATE_WALK_DL:
+	// 				animator.SetInteger("state", STATE_WALK_DL);
+	// 				break;
+	//
+	// 		case STATE_WALK_UL:
+	// 				animator.SetInteger("state", STATE_WALK_UL);
+	// 				break;
+	//
+	// 		case STATE_IDLE:
+	// 				animator.SetInteger("state", STATE_IDLE);
+	// 				break;
+	// 		}
+	// 		_currentAnimationState = state;
+	// }
+
+	//--------------------------------------
+  // Check if player has collided with the floor
+  //--------------------------------------
 	void OnCollisionEnter (Collision col)
 	{
 		if(col.gameObject.tag == "ground")
 		{
-			anim.SetBool("grounded", true);
 			onGround = true;
 		}
 	}
+
+	//--------------------------------------
+	// Flip player sprite for left/right walking on server
+	//--------------------------------------
+	[Command]
+	public void CmdChangeDirection(string direction)
+	{
+		if (_currentDirection != direction)
+		{
+			if (direction == "right")
+			{
+				localSprite.flipX = true;
+				_currentDirection = "right";
+			}
+			else if (direction == "left")
+			{
+				localSprite.flipX = false;
+	      _currentDirection = "left";
+			}
+		}
+	}
+
+	//--------------------------------------
+	// Flip player sprite for left/right walking
+	//--------------------------------------
+	void changeDirection(string direction)
+	{
+		if (_currentDirection != direction)
+		{
+			if (direction == "right")
+			{
+				localSprite.flipX = true;
+				_currentDirection = "right";
+			}
+			else if (direction == "left")
+			{
+				localSprite.flipX = false;
+	      _currentDirection = "left";
+			}
+		}
+	}
+
 }

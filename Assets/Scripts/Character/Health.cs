@@ -15,7 +15,7 @@ public class Health : NetworkBehaviour {
 
     private NetworkStartPosition[] spawnPoints;
 
-    void Start ()
+    void Start()
     {
         if (isLocalPlayer)
         {
@@ -45,7 +45,7 @@ public class Health : NetworkBehaviour {
         }
     }
 
-    void OnChangeHealth (int currentHealth )
+    void OnChangeHealth(int currentHealth)
     {
         healthBar.sizeDelta = new Vector2(currentHealth , healthBar.sizeDelta.y);
     }
