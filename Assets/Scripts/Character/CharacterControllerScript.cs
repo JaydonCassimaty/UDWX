@@ -9,6 +9,7 @@ public class CharacterControllerScript : NetworkBehaviour {
 
 	SpriteRenderer localSprite;
 	Animator animator;
+	Rigidbody rb;
 
 	//some flags to check when certain animations are playing
 	// bool _isPlaying_walk = false;
@@ -20,9 +21,12 @@ public class CharacterControllerScript : NetworkBehaviour {
 	public GameObject bulletPrefab;
 	public Transform bulletSpawn;
 
+	public float projectileForce = 1f;
+
 	// Use this for initialization
 	void Start ()
 	{
+		rb = GetComponent<Rigidbody>();
 		animator = GetComponent<Animator>();
 		localSprite = GetComponent<SpriteRenderer>();
 	}
@@ -30,9 +34,7 @@ public class CharacterControllerScript : NetworkBehaviour {
 	void FixedUpdate()
 	{
 		if (!isLocalPlayer)
-		{
     	return;
-		}
 
 		if (Input.GetKeyDown(KeyCode.Z))
 		{
@@ -41,7 +43,7 @@ public class CharacterControllerScript : NetworkBehaviour {
 
 		var x = Input.GetAxis("Horizontal") * moveSpeed;
     var z = Input.GetAxis("Vertical") * moveSpeed;
-		var y = Input.GetAxis("Jump") * -moveSpeed;
+		var y = Input.GetAxis("Jump");
 
 		bool isWalking = (Mathf.Abs(x) + Mathf.Abs(z)) > 0;
 
@@ -51,15 +53,15 @@ public class CharacterControllerScript : NetworkBehaviour {
 		if (Input.GetAxis("Jump") > 0)
 		{
 				onGround = false;
-	 		 	transform.Translate(0f, 0f, y);
+	 		 	transform.Translate(0f, Mathf.Clamp(y, 0.08f, 0.08f), 0f);
 		}
 
-		if(isWalking && onGround)
+		if(isWalking)
 		{
 			animator.SetFloat("x", x);
 			animator.SetFloat("y", z);
 
-			transform.Translate(x, z, 0f);
+			transform.Translate(x, 0f, z);
 			//North-East Movement
 			if (z >= 0.01f && x >= 0.01f)
 			{
@@ -96,6 +98,7 @@ public class CharacterControllerScript : NetworkBehaviour {
 	//Effects for local player
 	public override void OnStartLocalPlayer()
 	{
+		// transform.LookAt(Camera.main.transform);
 		Camera.main.GetComponent<CameraFollow>().setTarget(gameObject.transform);
 		GetComponentInChildren<SpriteRenderer>().color = new Color(1f,0.30196078f, 0.30196078f);
 	}
@@ -103,6 +106,7 @@ public class CharacterControllerScript : NetworkBehaviour {
 	[Command]
 	void CmdFire()
 	{
+
 		var mana = GetComponent<Mana>();
 		var spellCost = 10;
 
@@ -110,20 +114,26 @@ public class CharacterControllerScript : NetworkBehaviour {
 		{
 			mana.UseMana(spellCost);
 
-			// Create the Bullet from the Bullet Prefab
-			var bullet = (GameObject)Instantiate (
-					bulletPrefab,
-					bulletSpawn.position,
-					bulletSpawn.rotation);
+			//Instantiate a copy of our projectile and store it in a new rigidbody variable called clonedBullet
+			var clonedBullet = Instantiate(bulletPrefab, bulletSpawn.position, transform.rotation);
 
-			// Add velocity to the bullet
-			bullet.GetComponent<Rigidbody>().velocity = bullet.transform.up * 6;
+			//Add force to the instantiated bullet, pushing it forward away from the bulletSpawn location, using projectile force for how hard to push it away
+			clonedBullet.GetComponent<Rigidbody>().AddForce(bulletSpawn.transform.forward * projectileForce);
+
+			// // Create the Bullet from the Bullet Prefab
+			// var bullet = (GameObject)Instantiate (
+			// 		bulletPrefab,
+			// 		bulletSpawn.position,
+			// 		bulletSpawn.rotation);
+			//
+			// // Add velocity to the bullet
+			// bullet.GetComponent<Rigidbody>().velocity = bullet.transform.forward * 6;
 
 			// Spawn the bullet on the Clients
-			NetworkServer.Spawn(bullet);
+			NetworkServer.Spawn(clonedBullet);
 
 			// Destroy the bullet after 2 seconds
-			Destroy(bullet, 2.0f);
+			Destroy(clonedBullet, 2.0f);
 		}
 	}
 

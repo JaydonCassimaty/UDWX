@@ -10,8 +10,8 @@ using System.Collections;
      // Update is called once per frame
      void Update()
      {
-       camHeight += Input.GetAxis("Mouse ScrollWheel");
-       camCentre += Input.GetAxis("Mouse ScrollWheel");
+       camHeight -= Input.GetAxis("Mouse ScrollWheel");
+       camCentre -= Input.GetAxis("Mouse ScrollWheel");
        camHeight = Mathf.Clamp(camHeight, 3f, 9f);
        camCentre = Mathf.Clamp(camCentre, 1.5f, 5f);
 
